@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Vialmsi/Interview/internal/entity"
+	customErrors "github.com/Vialmsi/Interview/internal/errors"
 
 	"github.com/signintech/gopdf"
 	"github.com/sirupsen/logrus"
@@ -93,7 +94,7 @@ func (p *PDFService) LoadPDFFromBarcode(userID int, barcode string) (string, err
 
 	p.logger.Info("[LoadPDFFromBarcode] ended")
 
-	return "", errors.New("couldn't find file with this name")
+	return "", customErrors.PDFNotExistError
 }
 
 func (p *PDFService) LoadPDFFromName(fileName string) (string, error) {
@@ -103,7 +104,7 @@ func (p *PDFService) LoadPDFFromName(fileName string) (string, error) {
 	if err != nil {
 		p.logger.Errorf("[LoadPDFFromName] Error while check file: %s", err.Error())
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("file not exist")
+			return "", customErrors.FileNotExistError
 		}
 		return "", err
 	}

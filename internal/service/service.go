@@ -1,13 +1,7 @@
 package service
 
 import (
-	"errors"
-
 	"github.com/sirupsen/logrus"
-)
-
-var (
-	UniqueViolationError = errors.New("user with this login already exists")
 )
 
 type ServiceActions interface {

@@ -6,12 +6,9 @@ import (
 	"net/http"
 
 	"github.com/Vialmsi/Interview/internal/entity"
+	customErrors "github.com/Vialmsi/Interview/internal/errors"
 
 	"github.com/gin-gonic/gin"
-)
-
-var (
-	PDFNotExistError = errors.New("couldn't find file with this name")
 )
 
 type PDFService interface {
@@ -51,7 +48,7 @@ func (h *Handler) GetPdfFromBarcode(ctx *gin.Context) {
 	loadedPDF, err := h.pdfService.LoadPDFFromBarcode(userID, productID)
 	if err != nil {
 		h.logger.Warnf("[GetPdf] Error while load pdf attempt: %s", err.Error())
-		if !errors.As(err, &PDFNotExistError) {
+		if !errors.As(err, &customErrors.PDFNotExistError) {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
