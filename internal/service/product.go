@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -9,43 +11,42 @@ import (
 )
 
 type ProductStore interface {
-	SaveProduct(product entity.Product) error
-	RetrieveProduct(fileName string, userID int) (*entity.Product, error)
-	DeleteProduct(fileName string, userID int) error
-	RetrieveProductsByUserID(userID int) ([]entity.Product, error)
-	CreateUserStorage(userID int) error
+	SaveProduct(ctx context.Context, product *entity.Product) (*entity.Product, error)
+	RetrieveProduct(ctx context.Context, productID string, userID int) (*entity.Product, error)
+	DeleteProduct(ctx context.Context, productID string, userID int) error
+	RetrieveProductsByUserID(ctx context.Context, userID, limit, page int) ([]entity.Product, int, error)
 }
 
-func (s *Service) SaveProduct(userID int, product entity.Product) error {
+func (s *Service) SaveProduct(ctx context.Context, product *entity.Product, userID int) (*entity.Product, error) {
 	s.logger.Info("[SaveProduct] started")
 
 	product.UserID = userID
 
-	exProduct, err := s.productStore.RetrieveProduct(product.Barcode, product.UserID)
+	exProduct, err := s.store.RetrieveProduct(ctx, product.Barcode, userID)
 	fmt.Println(exProduct)
-	if exProduct != nil {
+	if exProduct.Barcode != "" {
 		s.logger.Info("[SaveProduct] product with this barcode already exists")
-		return fmt.Errorf("product with this barcode already exists")
+		return nil, fmt.Errorf("product with this barcode already exists")
 	}
 
-	err = s.productStore.SaveProduct(product)
+	product, err = s.store.SaveProduct(ctx, product)
 	if err != nil {
 		s.logger.Errorf("[SaveProduct] error while saving product: %s", err.Error())
-		return fmt.Errorf("error while saving product, try later\n%w", err)
+		return nil, fmt.Errorf("error while saving product, try later\n%w", err)
 	}
 
 	s.logger.Info("[SaveProduct] ended")
 
-	return nil
+	return product, nil
 }
 
-func (s *Service) RetrieveProduct(fileName string, userID int) (*entity.Product, error) {
+func (s *Service) RetrieveProduct(ctx context.Context, barcode string, userID int) (*entity.Product, error) {
 	s.logger.Info("[RetrieveProduct] started")
 
-	product, err := s.productStore.RetrieveProduct(fileName, userID)
+	product, err := s.store.RetrieveProduct(ctx, barcode, userID)
 	if err != nil {
 		s.logger.Errorf("[RetrieveProduct] error while retrieving product: %s", err.Error())
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("no such product")
 		}
 		return nil, fmt.Errorf("error while retrieveing product\n%w", err)
@@ -57,10 +58,10 @@ func (s *Service) RetrieveProduct(fileName string, userID int) (*entity.Product,
 	return product, nil
 }
 
-func (s *Service) DeleteProduct(fileName string, userID int) error {
+func (s *Service) DeleteProduct(ctx context.Context, barcode string, userID int) error {
 	s.logger.Info("[DeleteProduct] started")
 
-	err := s.productStore.DeleteProduct(fileName, userID)
+	err := s.store.DeleteProduct(ctx, barcode, userID)
 	if err != nil {
 		s.logger.Errorf("[DeleteProduct] error while deleting: %s", err)
 		if errors.Is(err, os.ErrNotExist) {
@@ -74,17 +75,17 @@ func (s *Service) DeleteProduct(fileName string, userID int) error {
 	return nil
 }
 
-func (s *Service) RetrieveProductsByUserID(userID int) ([]entity.Product, error) {
+func (s *Service) RetrieveProductsByUserID(ctx context.Context, userID, limit, page int) ([]entity.Product, int, error) {
 	s.logger.Info("[RetrieveProductsByUserID] started")
 
-	products, err := s.productStore.RetrieveProductsByUserID(userID)
+	products, count, err := s.store.RetrieveProductsByUserID(ctx, userID, limit, page)
 	if err != nil {
-		s.logger.Errorf("[RetrieveProductsByUserID] error while retrieving products: %s", err.Error())
-		return nil, err
+		s.logger.Errorf("[RetrieveProductsByUserID] error while retrieving products.sql: %s", err.Error())
+		return nil, 0, err
 	}
 
 	s.logger.Info(products)
 	s.logger.Info("[RetrieveProductsByUserID] ended")
 
-	return products, nil
+	return products, count, nil
 }

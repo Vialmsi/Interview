@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/Vialmsi/Interview/internal/entity"
 
@@ -9,28 +11,28 @@ import (
 )
 
 type ProductService interface {
-	SaveProduct(userID int, product entity.Product) error
-	RetrieveProduct(fileName string, userID int) (*entity.Product, error)
-	DeleteProduct(fileName string, userID int) error
-	RetrieveProductsByUserID(userID int) ([]entity.Product, error)
+	SaveProduct(ctx context.Context, product *entity.Product, userID int) (*entity.Product, error)
+	RetrieveProduct(ctx context.Context, barcode string, userID int) (*entity.Product, error)
+	DeleteProduct(ctx context.Context, barcode string, userID int) error
+	RetrieveProductsByUserID(ctx context.Context, userID, limit, page int) ([]entity.Product, int, error)
 }
 
-func (h *Handler) SaveProduct(c *gin.Context) {
-	var product entity.Product
+func (h *Handler) SaveProduct(ctx *gin.Context) {
+	var product *entity.Product
 
-	err := c.ShouldBindJSON(&product)
+	err := ctx.ShouldBindJSON(&product)
 	if err != nil {
 		h.logger.Errorf("[SaveProduct] Error while parse product struct: %s", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{
+		ctx.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid data, use correct",
 		})
 		return
 	}
 
-	ctxID, ok := c.Get(userIDCtx)
+	ctxID, ok := ctx.Get(userIDCtx)
 	if !ok {
 		h.logger.Errorf("[SaveProduct] Couldn't get user id from context")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't get your credentials, try later",
 		})
 		return
@@ -39,40 +41,40 @@ func (h *Handler) SaveProduct(c *gin.Context) {
 	userID, ok := ctxID.(int)
 	if !ok {
 		h.logger.Errorf("[SaveProduct] Couldn't parse user id to int")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't get your credentials, try later",
 		})
 		return
 	}
 
-	err = h.service.SaveProduct(userID, product)
+	product, err = h.service.SaveProduct(ctx, product, userID)
 	if err != nil {
 		h.logger.Errorf("[SaveProduct] Couldnt save product: %s", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"response": "Successfully Saved",
+	ctx.JSON(http.StatusOK, gin.H{
+		"product": product,
 	})
 }
 
-func (h *Handler) RetrieveProduct(c *gin.Context) {
-	productID := c.Param("barcode")
+func (h *Handler) RetrieveProduct(ctx *gin.Context) {
+	productID := ctx.Param("barcode")
 	if productID == "" {
 		h.logger.Errorf("[RetrieveProduct] Couldn't get product id from query param")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't get product id from query param",
 		})
 		return
 	}
 
-	ctxID, ok := c.Get(userIDCtx)
+	ctxID, ok := ctx.Get(userIDCtx)
 	if !ok {
 		h.logger.Errorf("[RetrieveProduct] Couldn't get user id from context")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't get your credentials, try later",
 		})
 		return
@@ -81,38 +83,38 @@ func (h *Handler) RetrieveProduct(c *gin.Context) {
 	userID, ok := ctxID.(int)
 	if !ok {
 		h.logger.Errorf("[RetrieveProduct] Couldn't parse user id to int")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't get your credentials, try later",
 		})
 		return
 	}
 
-	product, err := h.service.RetrieveProduct(productID, userID)
+	product, err := h.service.RetrieveProduct(ctx, productID, userID)
 	if err != nil {
 		h.logger.Errorf("[RetrieveProduct] Error while retrieving product: %s", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, product)
+	ctx.JSON(http.StatusOK, product)
 }
 
-func (h *Handler) DeleteProduct(c *gin.Context) {
-	productID := c.Param("barcode")
+func (h *Handler) DeleteProduct(ctx *gin.Context) {
+	productID := ctx.Param("barcode")
 	if productID == "" {
 		h.logger.Errorf("[DeleteProduct] Couldn't get product id from query param")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't get product id from query param",
 		})
 		return
 	}
 
-	ctxID, ok := c.Get(userIDCtx)
+	ctxID, ok := ctx.Get(userIDCtx)
 	if !ok {
 		h.logger.Errorf("[DeleteProduct] Couldn't get user id from context")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't get your credentials, try later",
 		})
 		return
@@ -121,31 +123,34 @@ func (h *Handler) DeleteProduct(c *gin.Context) {
 	userID, ok := ctxID.(int)
 	if !ok {
 		h.logger.Errorf("[DeleteProduct] Couldn't parse user id to int")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't get your credentials, try later",
 		})
 		return
 	}
 
-	err := h.service.DeleteProduct(productID, userID)
+	err := h.service.DeleteProduct(ctx, productID, userID)
 	if err != nil {
 		h.logger.Errorf("[DeleteProduct] Error while deleting product: %s", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	ctx.JSON(http.StatusOK, gin.H{
 		"response": "Successfully Deleted",
 	})
 }
 
-func (h *Handler) RetrieveProductsByUserID(c *gin.Context) {
-	ctxID, ok := c.Get(userIDCtx)
+func (h *Handler) RetrieveProductsByUserID(ctx *gin.Context) {
+	queryLimit := ctx.Query("limit")
+	queryPage := ctx.Query("page")
+
+	ctxID, ok := ctx.Get(userIDCtx)
 	if !ok {
 		h.logger.Errorf("[RetrieveProductsByUserID] Couldn't get user id from context")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't get your credentials, try later",
 		})
 		return
@@ -154,20 +159,26 @@ func (h *Handler) RetrieveProductsByUserID(c *gin.Context) {
 	userID, ok := ctxID.(int)
 	if !ok {
 		h.logger.Errorf("[RetrieveProductsByUserID] Couldn't parse user id to int")
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't get your credentials, try later",
 		})
 		return
 	}
 
-	products, err := h.service.RetrieveProductsByUserID(userID)
+	limit, _ := strconv.Atoi(queryLimit)
+	page, _ := strconv.Atoi(queryPage)
+
+	products, count, err := h.service.RetrieveProductsByUserID(ctx, userID, limit, page)
 	if err != nil {
-		h.logger.Errorf("[RetrieveProductsByUserID] Couldn't get user products: %s", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{
+		h.logger.Errorf("[RetrieveProductsByUserID] Couldn't get user products.sql: %s", err.Error())
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, products)
+	ctx.JSON(http.StatusOK, gin.H{
+		"products":    products,
+		"total_count": count,
+	})
 }

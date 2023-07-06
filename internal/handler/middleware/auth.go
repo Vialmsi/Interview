@@ -36,20 +36,20 @@ func NewAuthMiddleware(logger *logrus.Logger, tokenService TokenService) *AuthMi
 	}
 }
 
-func (a *AuthMiddleware) UserIdentity(c *gin.Context) {
-	header := c.GetHeader("Authorization")
+func (a *AuthMiddleware) UserIdentity(ctx *gin.Context) {
+	header := ctx.GetHeader("Authorization")
 	if header == "" {
 		a.logger.Error("[UserIdentity]: auth header is empty")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "auth header is empty"})
-		c.Abort()
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "auth header is empty"})
+		ctx.Abort()
 		return
 	}
 
 	headerParts := strings.Split(header, " ")
 	if len(headerParts) != 2 {
 		a.logger.Error("[UserIdentity] invalid auth header")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid auth header"})
-		c.Abort()
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "invalid auth header"})
+		ctx.Abort()
 		return
 	}
 
@@ -61,22 +61,22 @@ func (a *AuthMiddleware) UserIdentity(c *gin.Context) {
 		fmt.Println(TokenExpiredErr)
 		a.logger.Errorf("[UserIdentity] error while validating token %s", err)
 		if errors.As(err, &TokenExpiredErr) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "token is expired, pls login again"})
-			c.Abort()
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "token is expired, pls login again"})
+			ctx.Abort()
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "error while process request"})
-		c.Abort()
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "error while process request"})
+		ctx.Abort()
 		return
 	}
 
 	userID, err := a.tokenService.ParseToken(stringToken)
 	if err != nil {
 		a.logger.Error("[UserIdentity] couldn't parse token")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "couldn't parse token"})
-		c.Abort()
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "couldn't parse token"})
+		ctx.Abort()
 		return
 	}
 
-	c.Set(userIDCtx, userID)
+	ctx.Set(userIDCtx, userID)
 }

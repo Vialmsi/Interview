@@ -1,122 +1,146 @@
 package store
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/Vialmsi/Interview/internal/entity"
 )
 
-const (
-	fileStorage   = "files"
-	jsonExtension = ".json"
-	// filePermission - readable by all the user groups, but writable by the user only
-	filePermission = 0644
-	// dirPermission - full permissions
-	dirPermission = 0777
-)
-
-type ProductStore struct {
-}
-
-func NewProductStore() (*ProductStore, error) {
-	_, err := os.Open(fileStorage)
-	if errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(fileStorage, dirPermission)
-		if err != nil {
-			return nil, fmt.Errorf("error while creating file storage: %s", err.Error())
-		}
-	}
-	return &ProductStore{}, nil
-}
-
 // SaveProduct func which allows to save product into dir
-func (p *ProductStore) SaveProduct(product entity.Product) error {
-	data, err := json.Marshal(product)
-	if err != nil {
-		return err
+func (s *Store) SaveProduct(ctx context.Context, product *entity.Product) (*entity.Product, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.ctxTimeout)
+	defer cancel()
+
+	query := `INSERT INTO products(barcode,name,description,cost,user_id) VALUES($1,$2,$3,$4,$5)
+				RETURNING barcode,name,description,cost,user_id,file_location,created_at`
+
+	err := s.db.QueryRowContext(ctx, query,
+		product.Barcode,
+		product.Name,
+		product.Desc,
+		product.Cost,
+		product.UserID).Scan(
+		&product.Barcode,
+		&product.Name,
+		&product.Desc,
+		&product.Cost,
+		&product.UserID,
+		&product.FileLocation,
+		&product.CreatedAt)
+
+	if isUniqueViolation(err) {
+		return nil, errors.New("product with this barcode already exists")
 	}
 
-	strID := strconv.Itoa(product.UserID)
+	return product, err
+}
 
-	err = os.WriteFile(filepath.Join(fileStorage, strID, product.Barcode)+jsonExtension, data, filePermission)
-	if err != nil {
-		return err
+// RetrieveProduct func which allows to get product from dir using file name
+func (s *Store) RetrieveProduct(ctx context.Context, productID string, userID int) (*entity.Product, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.ctxTimeout)
+	defer cancel()
+
+	query := `SELECT barcode,name,description,cost,user_id 
+				FROM products 
+				WHERE barcode=$1 AND user_id=$2
+				ORDER BY products.created_at`
+
+	var product entity.Product
+
+	err := s.db.QueryRowContext(ctx, query, productID, userID).Scan(
+		&product.Barcode,
+		&product.Name,
+		&product.Desc,
+		&product.Cost,
+		&product.UserID)
+
+	return &product, err
+}
+
+// DeleteProduct func which allows to delete product from dir
+func (s *Store) DeleteProduct(ctx context.Context, productID string, userID int) error {
+	ctx, cancel := context.WithTimeout(ctx, s.ctxTimeout)
+	defer cancel()
+
+	query := `DELETE FROM products WHERE barcode=$1 AND user_id=$2`
+
+	res, err := s.db.ExecContext(ctx, query, productID, userID)
+
+	affectedRows, err := res.RowsAffected()
+	if affectedRows == 0 {
+		return errors.New("no such product to delete")
 	}
 
 	return err
 }
 
-// RetrieveProduct func which allows to get product from dir using file name
-func (p *ProductStore) RetrieveProduct(fileName string, userID int) (*entity.Product, error) {
-	strID := strconv.Itoa(userID)
-	f, err := os.Open(filepath.Join(fileStorage, strID, fileName+jsonExtension))
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	fi, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-
-	data := make([]byte, fi.Size())
-	_, err = f.Read(data)
-	if err != nil {
-		return nil, err
-	}
-
-	product := &entity.Product{}
-
-	err = json.Unmarshal(data, product)
-	if err != nil {
-		return nil, err
-	}
-
-	return product, nil
-}
-
-// DeleteProduct func which allows to delete product from dir
-func (p *ProductStore) DeleteProduct(fileName string, userID int) error {
-	strID := strconv.Itoa(userID)
-	return os.Remove(filepath.Join(fileStorage, strID, fileName) + jsonExtension)
-}
-
 // RetrieveProductsByUserID func which allows to get every user's product
-func (p *ProductStore) RetrieveProductsByUserID(userID int) ([]entity.Product, error) {
-	strID := strconv.Itoa(userID)
-	dir, err := os.Open(filepath.Join(fileStorage, strID))
-	if err != nil {
-		return nil, err
-	}
-	defer dir.Close()
+func (s *Store) RetrieveProductsByUserID(ctx context.Context, userID, limit, page int) ([]entity.Product, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.ctxTimeout)
+	defer cancel()
 
-	files, err := dir.Readdir(-1)
-	if err != nil {
-		return nil, err
+	if page <= 0 {
+		page = s.defaultPage
+	}
+	if limit <= 0 {
+		limit = s.defaultLimit
 	}
 
-	products := make([]entity.Product, len(files))
+	page = (page - 1) * limit
 
-	for i, file := range files {
-		product, err := p.RetrieveProduct(strings.Trim(file.Name(), jsonExtension), userID)
+	fmt.Println(page, limit)
+
+	query := `SELECT barcode, name, description, cost, user_id, file_location, created_at
+				FROM products 
+				WHERE user_id = $1
+				ORDER BY created_at DESC
+				LIMIT $2 OFFSET $3;`
+
+	rows, err := s.db.QueryContext(ctx, query, userID, limit, page)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var products []entity.Product
+	var count int
+
+	for rows.Next() {
+		product := entity.Product{}
+
+		err := rows.Scan(
+			&product.Barcode,
+			&product.Name,
+			&product.Desc,
+			&product.Cost,
+			&product.UserID,
+			&product.FileLocation,
+			&product.CreatedAt)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		products[i] = *product
+
+		products = append(products, product)
 	}
 
-	return products, nil
+	query = `SELECT COUNT(*) FROM products WHERE user_id=$1`
+
+	err = s.db.QueryRowContext(ctx, query, userID).Scan(&count)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return products, count, err
 }
 
-func (p *ProductStore) CreateUserStorage(userID int) error {
-	strID := strconv.Itoa(userID)
+func (s *Store) UpdateFileLocation(ctx context.Context, fileName, barcode string, userID int) error {
+	ctx, cancel := context.WithTimeout(ctx, s.ctxTimeout)
+	defer cancel()
 
-	return os.Mkdir(filepath.Join(fileStorage, strID), dirPermission)
+	query := `UPDATE products SET file_location=$1 WHERE barcode=$2`
+
+	_, err := s.db.ExecContext(ctx, query, fileName, barcode)
+
+	return err
 }

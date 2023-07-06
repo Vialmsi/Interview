@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/Vialmsi/Interview/internal/clients/token_service"
+	"github.com/Vialmsi/Interview/internal/clients/tokensvc"
 	"github.com/Vialmsi/Interview/internal/config"
 	"github.com/Vialmsi/Interview/internal/handler"
 	"github.com/Vialmsi/Interview/internal/jwt"
-	"github.com/Vialmsi/Interview/internal/pdf_service"
+	"github.com/Vialmsi/Interview/internal/pdfsvc"
 	"github.com/Vialmsi/Interview/internal/service"
 	"github.com/Vialmsi/Interview/internal/store"
 
@@ -19,27 +19,22 @@ func main() {
 	cfg, err := config.Init()
 	if err != nil {
 		logger.Fatalf("Error while load config: %s", err.Error())
-		return
 	}
 
-	userStore, err := store.NewUserStore(cfg.PSQLDatabase)
+	repo, err := store.NewStore(cfg.PSQLDatabase)
 	if err != nil {
-		logger.Fatalf("Error while init user store: %s", err)
-	}
-	productStore, err := store.NewProductStore()
-	if err != nil {
-		logger.Fatalf("Error while init product store: %s", err)
+		logger.Fatalf("Error while init store: %s", err.Error())
 	}
 
-	svc := service.NewService(logger, productStore, userStore)
+	svc := service.NewService(logger, repo)
 
-	tokenService := token_service.NewTokenService(logger, cfg.TokenServiceConfig)
+	tokenService := tokensvc.NewTokenService(logger, cfg.TokenServiceConfig)
 	err = tokenService.Ping()
 	if err != nil {
 		logger.Fatalf("Error while init token service: %s", err)
 	}
 
-	pdfService, err := pdf_service.NewPDFService(logger)
+	pdfService, err := pdfsvc.NewPDFService(logger, repo)
 	if err != nil {
 		logger.Fatalf("Error while init pdf service: %s", err)
 	}

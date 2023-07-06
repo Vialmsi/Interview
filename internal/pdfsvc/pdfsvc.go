@@ -1,6 +1,7 @@
-package pdf_service
+package pdfsvc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -36,11 +37,16 @@ const (
 	costY = 295
 )
 
-type PDFService struct {
-	logger *logrus.Logger
+type Store interface {
+	UpdateFileLocation(ctx context.Context, fileName, barcode string, userID int) error
 }
 
-func NewPDFService(logger *logrus.Logger) (*PDFService, error) {
+type PDFService struct {
+	logger *logrus.Logger
+	store  Store
+}
+
+func NewPDFService(logger *logrus.Logger, store Store) (*PDFService, error) {
 	_, err := os.Open(pdfStorage)
 	if errors.Is(err, os.ErrNotExist) {
 		err := os.Mkdir(pdfStorage, dirPermission)
@@ -48,46 +54,66 @@ func NewPDFService(logger *logrus.Logger) (*PDFService, error) {
 			return nil, fmt.Errorf("error while creating pdf storage: %s", err.Error())
 		}
 	}
-	return &PDFService{logger: logger}, nil
+	return &PDFService{
+		logger: logger,
+		store:  store,
+	}, nil
 }
 
-func (p *PDFService) LoadPDF(userID int, barcode string) (string, error) {
-	p.logger.Info("[LoadPDF] started")
+func (p *PDFService) LoadPDFFromBarcode(userID int, barcode string) (string, error) {
+	p.logger.Info("[LoadPDFFromBarcode] started")
 
 	strID := strconv.Itoa(userID)
 
 	err := p.checkUserFolder(strID)
 	if err != nil {
-		p.logger.Errorf("[LoadPdf] Error while checking user folder: %s", err)
+		p.logger.Errorf("[LoadPDFFromBarcode] Error while checking user folder: %s", err)
 		return "", fmt.Errorf("error, while generating pdf, try later")
 	}
 
 	dir, err := os.Open(filepath.Join(pdfStorage, strID))
 	if err != nil {
-		p.logger.Errorf("[LoadPDF] Error while open pdf storage: %s", err.Error())
+		p.logger.Errorf("[LoadPDFFromBarcode] Error while open pdf storage: %s", err.Error())
 		return "", err
 	}
 	defer dir.Close()
 
 	files, err := dir.Readdir(-1)
 	if err != nil {
-		p.logger.Errorf("[LoadPDF] Error while read dir: %s", err.Error())
+		p.logger.Errorf("[LoadPDFFromBarcode] Error while read dir: %s", err.Error())
 		return "", err
 	}
 
 	for _, file := range files {
 		if strings.Contains(file.Name(), barcode) {
-			p.logger.Info("[LoadPDF] ended")
+			p.logger.Info("[LoadPDFFromBarcode] ended")
 			return filepath.Join(pdfStorage, strID, file.Name()), nil
 		}
 	}
 
-	p.logger.Info("[LoadPDF] ended")
+	p.logger.Info("[LoadPDFFromBarcode] ended")
 
 	return "", errors.New("couldn't find file with this name")
 }
 
-func (p *PDFService) GeneratePDF(userID int, product entity.Product) (string, error) {
+func (p *PDFService) LoadPDFFromName(fileName string) (string, error) {
+	p.logger.Info("[LoadPDFFromName] started")
+
+	_, err := os.Stat(filepath.Join(fileName))
+	if err != nil {
+		p.logger.Errorf("[LoadPDFFromName] Error while check file: %s", err.Error())
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("file not exist")
+		}
+		return "", err
+	}
+
+	p.logger.Info("[LoadPDFFromName] ended")
+
+	return fileName, nil
+}
+
+func (p *PDFService) GeneratePDF(ctx context.Context, userID int, product entity.Product) (string, error) {
 	pdf := gopdf.GoPdf{}
 
 	pdf.Start(gopdf.Config{PageSize: gopdf.Rect{W: 420, H: 395}})
@@ -142,6 +168,12 @@ func (p *PDFService) GeneratePDF(userID int, product entity.Product) (string, er
 	if err != nil {
 		p.logger.Errorf("[GeneratePDF] Error while saving pdf: %s", err.Error())
 		return "", fmt.Errorf("error while generating pdf, try later")
+	}
+
+	err = p.store.UpdateFileLocation(ctx, fileName, product.Barcode, userID)
+	if err != nil {
+		p.logger.Errorf("[GeneratePDF] Error while updating file location in db: %s", err.Error())
+		return "", fmt.Errorf("error,while generating pdf, try later")
 	}
 
 	return fileName, nil

@@ -14,46 +14,46 @@ type UserService interface {
 	LoginUser(ctx context.Context, user entity.User) (*entity.User, error)
 }
 
-func (h *Handler) RegisterUser(c *gin.Context) {
+func (h *Handler) RegisterUser(ctx *gin.Context) {
 	var user entity.User
 
-	err := c.ShouldBindJSON(&user)
+	err := ctx.ShouldBindJSON(&user)
 	if err != nil {
 		h.logger.Errorf("[RegisterUser] Error while parse user struct: %s", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{
+		ctx.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid data, use correct",
 		})
 		return
 	}
 
-	userID, err := h.service.RegisterUser(c, user)
+	userID, err := h.service.RegisterUser(ctx, user)
 	if err != nil {
 		h.logger.Errorf("[RegisterUser] Error while register user: %s", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, userID)
+	ctx.JSON(http.StatusOK, userID)
 }
 
-func (h *Handler) LoginUser(c *gin.Context) {
+func (h *Handler) LoginUser(ctx *gin.Context) {
 	var user entity.User
 
-	err := c.ShouldBindJSON(&user)
+	err := ctx.ShouldBindJSON(&user)
 	if err != nil {
 		h.logger.Errorf("[LoginUser] Error while parse user struct: %s", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{
+		ctx.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid data, use correct",
 		})
 		return
 	}
 
-	loggedUser, err := h.service.LoginUser(c, user)
+	loggedUser, err := h.service.LoginUser(ctx, user)
 	if err != nil {
 		h.logger.Errorf("[LoginUser] Error while login user: %s", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -62,11 +62,11 @@ func (h *Handler) LoginUser(c *gin.Context) {
 	token, err := h.jwtService.GenerateToken(loggedUser.ID)
 	if err != nil {
 		h.logger.Errorf("[LoginUser] Error while generate token: %s", err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{
+		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Couldn't generate token for you, try later",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, token)
+	ctx.JSON(http.StatusOK, token)
 }
