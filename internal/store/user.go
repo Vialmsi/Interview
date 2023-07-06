@@ -2,44 +2,15 @@ package store
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
-	"time"
+	"errors"
 
-	"github.com/Vialmsi/Interview/internal/config"
 	"github.com/Vialmsi/Interview/internal/entity"
 
 	_ "github.com/lib/pq"
-	"github.com/sirupsen/logrus"
 )
 
-type UserStore struct {
-	db         *sql.DB
-	ctxTimeout time.Duration
-}
-
-func NewUserStore(cfg config.PSQLDatabase) (*UserStore, error) {
-	connStr := cfg.Address
-	db, err := sql.Open(cfg.Driver, connStr)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't open PSQL: %s", err)
-	}
-
-	err = db.Ping()
-	if err != nil {
-		return nil, fmt.Errorf("couldn't ping PSQl: %s", err)
-	}
-
-	logrus.Info("Ping PSQL - OK!")
-
-	return &UserStore{
-		db:         db,
-		ctxTimeout: time.Second * time.Duration(cfg.Timeout),
-	}, nil
-}
-
 // NewUser function which allows to create (register) new user (register)
-func (s *UserStore) NewUser(ctx context.Context, user entity.User) (int, error) {
+func (s *Store) NewUser(ctx context.Context, user entity.User) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.ctxTimeout)
 	defer cancel()
 
@@ -53,11 +24,15 @@ func (s *UserStore) NewUser(ctx context.Context, user entity.User) (int, error) 
 		user.Name,
 		user.Email).Scan(&id)
 
+	if isUniqueViolation(err) {
+		return 0, errors.New("user with this login already exists")
+	}
+
 	return id, err
 }
 
 // RetrieveUser func which allows to get user using login and password (login)
-func (s *UserStore) RetrieveUser(ctx context.Context, login, password string) (entity.User, error) {
+func (s *Store) RetrieveUser(ctx context.Context, login, password string) (entity.User, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.ctxTimeout)
 	defer cancel()
 
