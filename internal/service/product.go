@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/Vialmsi/Interview/internal/entity"
+	customErrors "github.com/Vialmsi/Interview/internal/errors"
 )
 
 type ProductStore interface {
@@ -26,7 +26,7 @@ func (s *Service) SaveProduct(ctx context.Context, product *entity.Product, user
 	fmt.Println(exProduct)
 	if exProduct.Barcode != "" {
 		s.logger.Info("[SaveProduct] product with this barcode already exists")
-		return nil, fmt.Errorf("product with this barcode already exists")
+		return nil, customErrors.ProductAlreadyExistError
 	}
 
 	product, err = s.store.SaveProduct(ctx, product)
@@ -47,7 +47,7 @@ func (s *Service) RetrieveProduct(ctx context.Context, barcode string, userID in
 	if err != nil {
 		s.logger.Errorf("[RetrieveProduct] error while retrieving product: %s", err.Error())
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("no such product")
+			return nil, customErrors.NoSuchProductError
 		}
 		return nil, fmt.Errorf("error while retrieveing product\n%w", err)
 	}
@@ -64,8 +64,8 @@ func (s *Service) DeleteProduct(ctx context.Context, barcode string, userID int)
 	err := s.store.DeleteProduct(ctx, barcode, userID)
 	if err != nil {
 		s.logger.Errorf("[DeleteProduct] error while deleting: %s", err)
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("project with this barcode not exists")
+		if errors.As(err, &customErrors.NoProductToDeleteError) {
+			return customErrors.NoProductToDeleteError
 		}
 		return fmt.Errorf("error while deleting\n%w", err)
 	}
@@ -80,7 +80,7 @@ func (s *Service) RetrieveProductsByUserID(ctx context.Context, userID, limit, p
 
 	products, count, err := s.store.RetrieveProductsByUserID(ctx, userID, limit, page)
 	if err != nil {
-		s.logger.Errorf("[RetrieveProductsByUserID] error while retrieving products.sql: %s", err.Error())
+		s.logger.Errorf("[RetrieveProductsByUserID] error while retrieving products: %s", err.Error())
 		return nil, 0, err
 	}
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/Vialmsi/Interview/internal/entity"
+	customErrors "github.com/Vialmsi/Interview/internal/errors"
 )
 
 type UserStore interface {
@@ -21,7 +22,7 @@ func (s *Service) LoginUser(ctx context.Context, user entity.User) (*entity.User
 	if err != nil {
 		s.logger.Errorf("[RetrieveUser] error in store: %s", err)
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("incorrect login or password")
+			return nil, customErrors.IncorrectLoginOrPasswordError
 		}
 		return nil, fmt.Errorf("error while process request\n%w", err)
 	}
@@ -38,7 +39,7 @@ func (s *Service) RegisterUser(ctx context.Context, user entity.User) (int, erro
 	userID, err := s.store.NewUser(ctx, user)
 	if err != nil {
 		s.logger.Errorf("[RegisterUser] error in store: %s", err.Error())
-		if errors.As(err, &UniqueViolationError) {
+		if errors.As(err, &customErrors.UserAlreadyExistError) {
 			return 0, fmt.Errorf("user with this login already exists")
 		}
 		return 0, fmt.Errorf("error while process request, try later\n%w", err)

@@ -1,12 +1,12 @@
 package tokensvc
 
 import (
-	"errors"
 	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/Vialmsi/Interview/internal/config"
+	customErrors "github.com/Vialmsi/Interview/internal/errors"
 
 	"github.com/sirupsen/logrus"
 )
@@ -100,7 +100,7 @@ func (t *TokenService) Validate(token string) error {
 
 	if string(body) != "" {
 		t.logger.Errorf("[Validate] Error from token service: %s", body)
-		return errors.New("token is expired, pls login again")
+		return customErrors.TokenExpiredError
 	}
 
 	t.logger.Info("[Validate] ended")

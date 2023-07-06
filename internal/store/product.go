@@ -2,10 +2,10 @@ package store
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/Vialmsi/Interview/internal/entity"
+	customErrors "github.com/Vialmsi/Interview/internal/errors"
 )
 
 // SaveProduct func which allows to save product into dir
@@ -31,7 +31,7 @@ func (s *Store) SaveProduct(ctx context.Context, product *entity.Product) (*enti
 		&product.CreatedAt)
 
 	if isUniqueViolation(err) {
-		return nil, errors.New("product with this barcode already exists")
+		return nil, customErrors.ProductAlreadyExistError
 	}
 
 	return product, err
@@ -70,7 +70,7 @@ func (s *Store) DeleteProduct(ctx context.Context, productID string, userID int)
 
 	affectedRows, err := res.RowsAffected()
 	if affectedRows == 0 {
-		return errors.New("no such product to delete")
+		return customErrors.NoProductToDeleteError
 	}
 
 	return err
@@ -138,9 +138,9 @@ func (s *Store) UpdateFileLocation(ctx context.Context, fileName, barcode string
 	ctx, cancel := context.WithTimeout(ctx, s.ctxTimeout)
 	defer cancel()
 
-	query := `UPDATE products SET file_location=$1 WHERE barcode=$2`
+	query := `UPDATE products SET file_location=$1 WHERE barcode=$2 AND user_id=$3`
 
-	_, err := s.db.ExecContext(ctx, query, fileName, barcode)
+	_, err := s.db.ExecContext(ctx, query, fileName, barcode, userID)
 
 	return err
 }
