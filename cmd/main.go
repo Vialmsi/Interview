@@ -1,12 +1,11 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/Vialmsi/Interview/internal/clients/token_service"
 	"github.com/Vialmsi/Interview/internal/config"
 	"github.com/Vialmsi/Interview/internal/handler"
 	"github.com/Vialmsi/Interview/internal/jwt"
+	"github.com/Vialmsi/Interview/internal/pdf_service"
 	"github.com/Vialmsi/Interview/internal/service"
 	"github.com/Vialmsi/Interview/internal/store"
 
@@ -37,13 +36,17 @@ func main() {
 	tokenService := token_service.NewTokenService(logger, cfg.TokenServiceConfig)
 	err = tokenService.Ping()
 	if err != nil {
-		fmt.Println(err)
-		return
+		logger.Fatalf("Error while init token service: %s", err)
+	}
+
+	pdfService, err := pdf_service.NewPDFService(logger)
+	if err != nil {
+		logger.Fatalf("Error while init pdf service: %s", err)
 	}
 
 	jwtService := jwt.NewJWTService(logger, tokenService, cfg.TokenCredentials)
 
-	hdlr := handler.NewHandler(logger, svc, jwtService)
+	hdlr := handler.NewHandler(logger, svc, jwtService, pdfService)
 
 	server := gin.New()
 

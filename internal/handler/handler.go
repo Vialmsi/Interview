@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/Vialmsi/Interview/internal/handler/middleware"
 	"github.com/Vialmsi/Interview/internal/jwt"
+	"github.com/Vialmsi/Interview/internal/pdf_service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -21,13 +22,15 @@ type Handler struct {
 	logger     *logrus.Logger
 	service    Service
 	jwtService *jwt.JWTService
+	pdfService PDFService
 }
 
-func NewHandler(logger *logrus.Logger, service Service, jwtService *jwt.JWTService) *Handler {
+func NewHandler(logger *logrus.Logger, service Service, jwtService *jwt.JWTService, pdfService *pdf_service.PDFService) *Handler {
 	return &Handler{
 		logger:     logger,
 		service:    service,
 		jwtService: jwtService,
+		pdfService: pdfService,
 	}
 }
 
@@ -45,4 +48,7 @@ func (h *Handler) Mount(r *gin.Engine) {
 	productRoutes.DELETE("/:barcode", h.DeleteProduct)
 	productRoutes.POST("", h.SaveProduct)
 	productRoutes.GET("", h.RetrieveProductsByUserID)
+
+	pdfRoutes := api.Group("/pdf", authMiddleware.UserIdentity)
+	pdfRoutes.GET("/:barcode", h.GetPdf)
 }
