@@ -14,7 +14,7 @@ type UserStore interface {
 	RetrieveUser(ctx context.Context, login, password string) (entity.User, error)
 }
 
-func (s *Service) RetrieveUser(ctx context.Context, user entity.User) (*entity.User, error) {
+func (s *Service) LoginUser(ctx context.Context, user entity.User) (*entity.User, error) {
 	s.logger.Info("[RetrieveUser] started")
 
 	user, err := s.userStore.RetrieveUser(ctx, user.Login, user.Password)
