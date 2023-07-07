@@ -39,7 +39,7 @@ func (s *Service) RegisterUser(ctx context.Context, user entity.User) (int, erro
 	userID, err := s.store.NewUser(ctx, user)
 	if err != nil {
 		s.logger.Errorf("[RegisterUser] error in store: %s", err.Error())
-		if errors.As(err, &customErrors.UserAlreadyExistError) {
+		if errors.Is(err, customErrors.UserAlreadyExistError) {
 			return 0, fmt.Errorf("user with this login already exists")
 		}
 		return 0, fmt.Errorf("error while process request, try later\n%w", err)

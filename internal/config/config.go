@@ -69,7 +69,7 @@ type TokenCredentials struct {
 func Init() (Config, error) {
 	// .env - for docker
 	// local.env -  for local load
-	err := godotenv.Load("local.env")
+	err := godotenv.Load(".env")
 	if err != nil {
 		return Config{}, err
 	}

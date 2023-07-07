@@ -2,9 +2,10 @@ package middleware
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
+
+	customErrors "github.com/Vialmsi/Interview/internal/errors"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -12,10 +13,6 @@ import (
 
 const (
 	userIDCtx = "userID"
-)
-
-var (
-	TokenExpiredErr = errors.New("token is expired, pls login again")
 )
 
 type TokenService interface {
@@ -57,10 +54,8 @@ func (a *AuthMiddleware) UserIdentity(ctx *gin.Context) {
 
 	err := a.tokenService.ValidateToken(stringToken)
 	if err != nil {
-		fmt.Println(err)
-		fmt.Println(TokenExpiredErr)
 		a.logger.Errorf("[UserIdentity] error while validating token %s", err)
-		if errors.As(err, &TokenExpiredErr) {
+		if errors.Is(err, customErrors.TokenExpiredError) {
 			ctx.JSON(http.StatusForbidden, gin.H{"error": "token is expired, pls login again"})
 			ctx.Abort()
 			return
