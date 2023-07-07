@@ -68,7 +68,7 @@ func (s *Store) DeleteProduct(ctx context.Context, productID string, userID int)
 
 	res, err := s.db.ExecContext(ctx, query, productID, userID)
 
-	affectedRows, err := res.RowsAffected()
+	affectedRows, _ := res.RowsAffected()
 	if affectedRows == 0 {
 		return customErrors.NoProductToDeleteError
 	}

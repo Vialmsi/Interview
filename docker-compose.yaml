@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    ports:
+      - '5433:5432'
+    environment:
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+    env_file:
+      - .env
+    volumes:
+      - db:/var/lib/postgresql/data
+  auth-generator:
+    image: andrianovartemii/gm-test-task-auth-generator:amd
+    ports:
+      - "8082:8080"
+    environment:
+      AUTH_TOKEN_LIFETIME: 1000
+    platform: linux/arm64/v8
+  server:
+    image: app
+    build:
+      dockerfile: Dockerfile
+      context: .
+      target: runner
+    depends_on:
+      - db
+      - auth-generator
+    ports:
+      - "8081:8081"
+    volumes:
+      - .:/opt/app
+    env_file:
+      - .env
+    restart: always
+volumes:
+  db:
+    driver: local

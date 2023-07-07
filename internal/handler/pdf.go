@@ -48,7 +48,7 @@ func (h *Handler) GetPdfFromBarcode(ctx *gin.Context) {
 	loadedPDF, err := h.pdfService.LoadPDFFromBarcode(userID, productID)
 	if err != nil {
 		h.logger.Warnf("[GetPdf] Error while load pdf attempt: %s", err.Error())
-		if !errors.As(err, &customErrors.PDFNotExistError) {
+		if !errors.Is(err, customErrors.PDFNotExistError) {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
